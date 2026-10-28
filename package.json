@@ -1,0 +1,16 @@
+{
+  "name": "veil",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Metadata-minimal chat over Tor onion services; zero runtime dependencies",
+  "engines": { "node": ">=20" },
+  "bin": { "veil": "src/veil.js" },
+  "scripts": {
+    "test": "node test/run.js",
+    "start": "node src/veil.js web",
+    "web": "node src/veil.js web",
+    "relay": "node src/veil.js relay",
+    "gateway": "node src/veil.js gateway --relay 127.0.0.1:9443"
+  }
+}
