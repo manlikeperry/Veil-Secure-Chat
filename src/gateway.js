@@ -238,6 +238,33 @@ function portBusy(err, what, where) {
   return new Error(`${what} cannot start: ${where} is already taken. Stop what holds it, or pass a different port.`);
 }
 
+// PaaS hosts (Render, Fly, Heroku) assign the port themselves through PORT and expect
+// the app to read it. An explicit --port still wins, and `0` has to survive the check
+// rather than being read as "unset", because 0 means "give me any free port".
+function pickPort(explicit, fallback) {
+  if (Number.isInteger(explicit)) return explicit;
+  const fromEnv = Number(process.env.PORT);
+  return Number.isInteger(fromEnv) && fromEnv > 0 && fromEnv < 65536 ? fromEnv : fallback;
+}
+
+// Loopback stays the default on purpose. This is an IP-hiding tool, and a gateway that
+// listens on every interface is reachable by whatever that network is -- a laptop in a
+// cafe, in the local case. Saying --host 0.0.0.0 is the operator choosing otherwise,
+// and then they hear what that means from the process that knows.
+function listenAddress(options, fallbackPort) {
+  return { host: options.host ?? '127.0.0.1', port: pickPort(options.port, fallbackPort) };
+}
+
+function interfaceWarning(address) {
+  if (address !== '0.0.0.0' && address !== '::') return null;
+  return (
+    'WARNING: listening on every interface. This is a plain-http server: no TLS, no auth, no rate limit. ' +
+    'Anyone who can reach this port can load the app and open relay lanes through it, and the only thing ' +
+    'separating them from using it as a free rendezvous peer is the same-origin check, which their own ' +
+    'browser passes by definition. Put TLS in front of it, or keep it on loopback.'
+  );
+}
+
 export async function commandGateway(options) {
   if (!options.relay) throw new Error('gateway needs --relay host:port');
   const { relayHost, relayPort } = relayTarget(options.relay);
@@ -245,20 +272,15 @@ export async function commandGateway(options) {
   guardOnion(relayHost, tor);
 
   const gateway = createGateway({ relayHost, relayPort, tor });
-  const host = options.host ?? '127.0.0.1';
-  const address = await listen(
-    gateway.server,
-    options.port ?? DEFAULT_GATEWAY_PORT,
-    host
-  ).catch((err) => {
-    throw portBusy(err, 'the page', `${host}:${options.port ?? DEFAULT_GATEWAY_PORT}`);
+  const { host, port } = listenAddress(options, DEFAULT_GATEWAY_PORT);
+  const address = await listen(gateway.server, port, host).catch((err) => {
+    throw portBusy(err, 'the page', `${host}:${port}`);
   });
   console.log(`web app on http://${address.address === '0.0.0.0' ? '127.0.0.1' : address.address}:${address.port}`);
   console.log(`bridging every page session to the relay at ${relayHost}:${relayPort}${tor ? ' through Tor' : ''}`);
   console.log('the gateway reads no message content and stores nothing');
-  if (address.address === '0.0.0.0') {
-    console.log('WARNING: bound to all interfaces. Anyone on this network can use it as a relay client.');
-  }
+  const warn = interfaceWarning(address.address);
+  if (warn) console.log(warn);
   await new Promise((resolve) => process.on('SIGINT', resolve));
   await gateway.close();
 }
@@ -289,8 +311,11 @@ export async function startWeb(options = {}) {
   }
 
   const gateway = createGateway({ relayHost, relayPort, tor });
-  const host = options.host ?? '127.0.0.1';
-  const port = options.port ?? DEFAULT_GATEWAY_PORT;
+  // PORT belongs to the process the platform routes traffic to, which is the page. The
+  // relay this command starts for itself stays on loopback and its own port: it is not
+  // something the host should ever route to, and a peer reaching it directly is exactly
+  // the property the browser clients give up by going through a gateway.
+  const { host, port } = listenAddress(options, DEFAULT_GATEWAY_PORT);
   let address;
   try {
     address = await listen(gateway.server, port, host);
@@ -318,16 +343,17 @@ export async function startWeb(options = {}) {
 
 export async function commandWeb(options = {}) {
   const web = await startWeb(options);
-  console.log(`web app on ${web.url}`);
+  console.log(web.publicAddress === '0.0.0.0' || web.publicAddress === '::'
+    ? `web app listening on ${web.publicAddress}:${web.port} -- reach it through whatever URL routes here`
+    : `web app on ${web.url}`);
   console.log(
     web.relay
       ? `relay for this chat listening on ${web.relayHost}:${web.relayPort}, in this process`
       : `bridging every page session to the relay at ${web.relayHost}:${web.relayPort}${options.tor ? ' through Tor' : ''}`
   );
   console.log('the relay and the gateway read no message content and store nothing');
-  if (web.publicAddress === '0.0.0.0') {
-    console.log('WARNING: bound to all interfaces. Anyone on this network can use it as a relay client.');
-  }
+  const warn = interfaceWarning(web.publicAddress);
+  if (warn) console.log(warn);
   console.log('open the URL in a browser, or press ctrl-c to stop');
   await new Promise((resolve) => process.on('SIGINT', resolve));
   await web.close();

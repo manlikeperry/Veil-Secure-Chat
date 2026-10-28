@@ -14,8 +14,10 @@ import { isOnion } from './socks5.js';
 
 const USAGE = `veil -- metadata-minimal chat over a Tor onion relay
 
-  veil web     [--port N] [--relay-port N] [--relay H:P] [--tor ip:p]
-                                         one command: relay plus the web chat UI
+  veil web     [--port N] [--relay-port N] [--relay H:P] [--host H] [--tor ip:p]
+                                         one command: relay plus the web chat UI.
+                                         No --port? $PORT, then 9444. Loopback unless
+                                         --host says otherwise.
   veil relay   [--port N] [--host H]     run the stateless relay (front it with Tor)
   veil gateway [--port N] --relay H:P [--tor ip:p]
                                          serve the web chat UI and bridge it to the relay

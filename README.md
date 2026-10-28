@@ -101,13 +101,46 @@ relay is inside Tor. Loading the app from `127.0.0.1` does not expose your addre
 the relay. It does expose it to whoever runs the gateway, which is why the gateway
 binds loopback by default and warns if you make it listen on every interface.
 
+## Putting it on a host
+
+A PaaS assigns the port itself and expects a listener on every interface, so `veil web`
+reads `PORT` when `--port` is not given and the start command is:
+
+```
+node src/veil.js web --host 0.0.0.0
+```
+
+The relay it starts for itself stays on loopback, deliberately: the host must route to
+the page, not to a second port nothing was asked to expose. What changes once the
+gateway is not on your machine:
+
+- **TLS becomes the host's job.** `crypto.subtle` needs a secure context, and a hosted
+  `https://…` page provides one; `relaySocketPath` picks `wss:` from
+  `location.protocol`, so the websocket follows the page. That TLS ends at the host's
+  proxy -- the hop from the proxy into this process is plain http.
+- **The host's operator joins the threat model**, in the "whoever runs the gateway"
+  row of [docs/THREAT_MODEL.md](docs/THREAT_MODEL.md). Clients gain one thing from it:
+  the relay only ever sees the gateway's address, never a client's.
+- **The port is now public.** There is no auth and no rate limit here, and the
+  same-origin check that stops another page driving the gateway is satisfied by any
+  visitor's own browser. Lane churn and denial of service are unaddressed -- the open
+  items in the threat model are exactly the ones a public host runs into first.
+
+One thing that does not work yet: an invite printed by `veil web` carries the *internal*
+relay address (`127.0.0.1:9443/…`). Two browser tabs against the same instance pair
+fine, because both reach the relay through the gateway, but a terminal peer or another
+host cannot dial that. Either point the gateway at a relay peers can actually reach
+(`veil web --relay <public-host>:<port>`), or keep the terminal client local. Free
+tiers that sleep between requests also cut live websockets, which ends a conversation
+rather than pausing it.
+
 ## Tests
 
 ```
 node test/run.js
 ```
 
-54 checks in seven suites. Handshake: the official `Noise_XX` known-answer vector
+55 checks in seven suites. Handshake: the official `Noise_XX` known-answer vector
 replayed byte for byte, transcript hashes equal on both sides, both directions
 encrypted, tampered and replayed frames rejected, key rotation at 65536 messages.
 Crypto: the Node and WebCrypto providers produce identical primitives, and a Node peer
@@ -156,22 +189,25 @@ trying not to have.
 
 ## Runtime note
 
-Requires Node 20+. On this machine there is no `npm` and no standalone `node` on PATH,
-so `npm start` fails and `node src/...` fails: Node only exists as Qoder's Electron
-binary, run with `ELECTRON_RUN_AS_NODE=1`. Every command above works once that prefix
-replaces `node`. In Git Bash, the whole web setup is one line:
+Requires Node 20+. This machine now has a standalone Node (`node --version` → v24.22.1,
+`npm --version` → 11.19.1), so the normal forms work:
 
 ```
-cd /c/Users/hljah/Documents/Qoder/2026-10-15/4135f98d
+npm start                    # same as: node src/veil.js web
+node src/veil.js web
+```
+
+Before that, Node only existed as Qoder's Electron binary, and that path still works on
+a machine with no Node at all — prefix any command with `ELECTRON_RUN_AS_NODE=1` and use
+`C:/Users/hljah/AppData/Local/Programs/Qoder/Qoder.exe` in place of `node`:
+
+```
 ELECTRON_RUN_AS_NODE=1 "C:/Users/hljah/AppData/Local/Programs/Qoder/Qoder.exe" src/veil.js web
-# then open http://127.0.0.1:9444 in a browser
 ```
 
-The `scripts` in `package.json` (`npm start`, `npm run web`, `npm run relay`,
-`npm run gateway`) are the same commands and need a real Node install. Until then,
-**double-click `start-web.cmd`** in the project folder: it finds Qoder's Node runtime,
-sets `ELECTRON_RUN_AS_NODE`, and runs `veil web` on port 9444 using paths taken from its
-own location, so nothing has to be on `PATH`.
+`start-web.cmd` in the project folder picks whichever exists — it looks for `node` on
+`PATH` first, falls back to the Electron binary, and resolves the project path from its
+own location, so it needs no `cd` and nothing on `PATH`.
 
 Two failure messages worth knowing, because both mean "something is already running":
 
