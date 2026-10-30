@@ -1,0 +1,138 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="referrer" content="no-referrer" />
+    <title>veil</title>
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+    <div id="app" class="phone">
+      <header class="bar">
+        <button id="back" class="icon back" type="button" hidden aria-label="Back">&#8592;</button>
+        <div class="bar-title">
+          <h1>veil</h1>
+          <p id="subtitle">nothing is stored, on either side</p>
+        </div>
+        <span id="status-dot" class="dot idle" title="connection status"></span>
+      </header>
+
+      <!-- The notice is not dismissible-by-code: it is the one place the app states
+           what the relay can still learn, and it is repeated on every new session. -->
+      <section id="screen-home" class="screen">
+        <div class="card">
+          <h2>Start or join a chat</h2>
+          <p class="muted">
+            A session key is made in this tab and thrown away when it closes. The relay sees
+            timing and byte counts only &mdash; it never sees a name, a message, or your address.
+          </p>
+          <label class="field">
+            <span>Your display name</span>
+            <input id="nick" type="text" maxlength="40" placeholder="shown to the peer only" autocomplete="off" />
+          </label>
+          <div class="actions">
+            <button id="make-invite" class="primary" type="button">Create an invite</button>
+            <button id="open-join" type="button">Join with an invite</button>
+          </div>
+        </div>
+        <div id="capability" class="card warn" hidden>
+          <h2>This browser cannot do the handshake</h2>
+          <p id="capability-detail" class="muted"></p>
+        </div>
+      </section>
+
+      <section id="screen-invite" class="screen" hidden>
+        <div class="card">
+          <h2 id="invite-heading">Waiting for your peer</h2>
+          <p class="muted" id="invite-send-note">Send this to them by a channel the relay does not control.</p>
+          <div class="invite-row" id="invite-row">
+            <code id="invite-code" class="selectable">&hellip;</code>
+            <button id="copy-invite" class="ghost" type="button">Copy</button>
+          </div>
+          <dl class="facts">
+            <dt>Your fingerprint</dt>
+            <dd id="own-fingerprint" class="mono">&hellip;</dd>
+            <dt>Relay</dt>
+            <dd id="relay-name" class="mono">&hellip;</dd>
+          </dl>
+          <div id="invite-waiting" class="waiting">
+            <span class="pulse"></span> waiting for the invite to be used
+          </div>
+          <p class="hint" id="invite-keep-note">
+            Keep this tab open. If you close it the invite dies with it &mdash; there is no
+            record anywhere to come back to.
+          </p>
+        </div>
+      </section>
+
+      <section id="screen-join" class="screen" hidden>
+        <div class="card">
+          <h2>Join</h2>
+          <label class="field">
+            <span>Invite code</span>
+            <input id="invite-input" type="text" placeholder="host:port/handle" autocomplete="off" spellcheck="false" />
+          </label>
+          <details class="advanced">
+            <summary>Pin a peer key (recommended)</summary>
+            <label class="field">
+              <span>Expected public key, 64 hex</span>
+              <input id="expect-key" type="text" maxlength="64" placeholder="optional" autocomplete="off" spellcheck="false" />
+            </label>
+            <p class="hint">
+              Pinned before the handshake finishes, so a mismatch aborts instead of letting you
+              type into it.
+            </p>
+          </details>
+          <div class="actions">
+            <button id="do-join" class="primary" type="button">Connect</button>
+          </div>
+          <p id="join-error" class="error" hidden></p>
+        </div>
+      </section>
+
+      <main id="screen-chat" class="screen chat" hidden>
+        <div class="chat-head">
+          <div>
+            <strong id="peer-name">peer</strong>
+            <small id="peer-note" class="mono">&hellip;</small>
+          </div>
+          <button id="verify" class="ghost small" type="button">Compare keys</button>
+        </div>
+        <div id="banner" class="banner" hidden></div>
+        <div id="thread" class="thread" role="log" aria-live="polite"></div>
+        <form id="composer" class="composer" autocomplete="off">
+          <input id="draft" type="text" placeholder="Type a message" maxlength="4000" />
+          <button class="send" type="submit" aria-label="Send">&#9654;</button>
+        </form>
+      </main>
+
+      <footer class="bar foot">
+        <span id="foot-note">local gateway &middot; no accounts &middot; no history</span>
+      </footer>
+    </div>
+
+    <dialog id="verify-dialog">
+      <div class="card">
+        <h2>Compare fingerprints</h2>
+        <p class="muted">
+          Read these aloud or check them on a channel the relay does not control. They match only if
+          nobody between you is relaying two handshakes.
+        </p>
+        <dl class="facts">
+          <dt>Theirs</dt>
+          <dd id="peer-fingerprint" class="mono">&mdash;</dd>
+          <dt>Yours</dt>
+          <dd id="my-fingerprint" class="mono">&mdash;</dd>
+          <dt>Session hash</dt>
+          <dd id="handshake-hash" class="mono">&mdash;</dd>
+        </dl>
+        <div class="actions">
+          <button id="verify-close" class="primary" type="button">Done</button>
+        </div>
+      </div>
+    </dialog>
+
+    <script type="module" src="/app.js"></script>
+  </body>
+</html>
